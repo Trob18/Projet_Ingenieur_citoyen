@@ -1,109 +1,93 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using System.Diagnostics;
-using System.Text.RegularExpressions;
 
 namespace ArchiveNumerique.Services
 {
+    /// <summary>
+    /// Parse les fichiers sitemap.xml (y compris les sitemap index).
+    /// </summary>
     internal class SitemapService
     {
         private readonly HttpClient _httpClient;
 
-        public SitemapService()
+        public SitemapService(HttpClient httpClient)
         {
-            var handler = new HttpClientHandler()
-            {
-                AutomaticDecompression = System.Net.DecompressionMethods.All
-            };
-            _httpClient = new HttpClient(handler);
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
+            _httpClient = httpClient;
         }
 
-        public async Task<List<string>> GetSitemapUrlsAsync(string domainUrl)
+        /// <summary>
+        /// Tente de récupérer les URLs depuis le(s) sitemap(s).
+        /// Retourne null si aucun sitemap n'est exploitable.
+        /// </summary>
+        public async Task<List<string>?> GetLinksAsync(List<string> sitemapUrls, Uri baseUri)
         {
-            var finalUrls = new HashSet<string>();
-            var sitemapFilesFound = new List<string>();
-            string rootUrl = domainUrl.TrimEnd('/');
-
-            string robotsUrl = rootUrl + "/robots.txt";
-
-            try
+            // Si robots.txt n'a pas indiqué de sitemap, on tente l'URL par défaut
+            if (sitemapUrls.Count == 0)
             {
-                var response = await _httpClient.GetAsync(robotsUrl);
-                if (response.IsSuccessStatusCode)
-                {
-                    string robotsContent = await response.Content.ReadAsStringAsync();
-                    var matches = Regex.Matches(robotsContent, @"^Sitemap:\s*(.+)$", RegexOptions.IgnoreCase | RegexOptions.Multiline);
-                    foreach (Match m in matches)
-                    {
-                        string sUrl = m.Groups[1].Value.Trim();
-                        if (sUrl.StartsWith("/")) sUrl = rootUrl + sUrl;
-                        sitemapFilesFound.Add(sUrl);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($">>>> [ERREUR] Robots.txt : {ex.Message}");
+                sitemapUrls = new List<string> { new Uri(baseUri, "/sitemap.xml").ToString() };
             }
 
-            if (sitemapFilesFound.Count == 0)
+            var allLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var url in sitemapUrls)
             {
-                sitemapFilesFound.Add(rootUrl + "/sitemap.xml");
+                await ParseSitemapRecursiveAsync(url, baseUri, allLinks);
             }
 
-            foreach (var sUrl in sitemapFilesFound)
-            {
-                await ParseSitemapInternal(sUrl, finalUrls);
-            }
-
-            return finalUrls.ToList();
+            return allLinks.Count > 0 ? new List<string>(allLinks) : null;
         }
 
-        private async Task ParseSitemapInternal(string url, HashSet<string> results)
+        private async Task ParseSitemapRecursiveAsync(string sitemapUrl, Uri baseUri, HashSet<string> results)
         {
             try
             {
-                var response = await _httpClient.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return;
+                var content = await _httpClient.GetStringAsync(sitemapUrl);
+                var doc = XDocument.Parse(content);
+                var ns = doc.Root?.Name.Namespace ?? XNamespace.None;
 
-                string contentType = response.Content.Headers.ContentType?.MediaType ?? "";
-                if (contentType.Contains("html")) return;
-
-                string xmlContent = await response.Content.ReadAsStringAsync();
-                xmlContent = xmlContent.Trim();
-
-                if (string.IsNullOrEmpty(xmlContent) || !xmlContent.StartsWith("<")) return;
-
-                XDocument doc = XDocument.Parse(xmlContent);
-                XNamespace ns = doc.Root?.GetDefaultNamespace() ?? XNamespace.None;
-
-                var sitemapNodes = doc.Descendants(ns + "sitemap").ToList();
-                if (sitemapNodes.Any())
+                // Sitemap Index — contient des <sitemap><loc>
+                foreach (var loc in doc.Descendants(ns + "sitemap").Elements(ns + "loc"))
                 {
-                    foreach (var node in sitemapNodes)
+                    var childUrl = loc.Value.Trim();
+                    if (!string.IsNullOrEmpty(childUrl))
                     {
-                        string subUrl = node.Element(ns + "loc")?.Value;
-                        if (!string.IsNullOrEmpty(subUrl) && subUrl != url)
-                            await ParseSitemapInternal(subUrl, results);
+                        await ParseSitemapRecursiveAsync(childUrl, baseUri, results);
                     }
                 }
 
-                var urlNodes = doc.Descendants(ns + "url").ToList();
-                foreach (var node in urlNodes)
+                // Sitemap standard — contient des <url><loc>
+                foreach (var loc in doc.Descendants(ns + "url").Elements(ns + "loc"))
                 {
-                    string finalUrl = node.Element(ns + "loc")?.Value;
-                    if (!string.IsNullOrEmpty(finalUrl)) results.Add(finalUrl);
+                    var link = loc.Value.Trim();
+                    if (IsInternalCleanLink(link, baseUri))
+                    {
+                        results.Add(CleanUrl(link));
+                    }
                 }
             }
-            catch (Exception ex)
+            catch
             {
-                Debug.WriteLine($">>>> [ERREUR] Parsing {url} : {ex.Message}");
+                // Sitemap inaccessible ou mal formé — on ignore
             }
+        }
+
+        private static bool IsInternalCleanLink(string url, Uri baseUri)
+        {
+            return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+                   && uri.Host.Equals(baseUri.Host, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string CleanUrl(string url)
+        {
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            {
+                // On enlève query string et fragment → liens propres
+                return uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
+            }
+            return url.TrimEnd('/');
         }
     }
 }

@@ -5,8 +5,67 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:ArchiveNumerique"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="Archive Numérique — Crawler" Height="600" Width="900">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
+        <!-- Barre de saisie URL -->
+        <TextBlock Grid.Row="0" Text="URL du site à crawler" FontWeight="SemiBold" Margin="0,0,0,4"/>
+
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBox x:Name="UrlTextBox"
+                     Grid.Column="0"
+                     Text="https://www.cesi.fr"
+                     VerticalContentAlignment="Center"
+                     Padding="6,4"
+                     FontSize="14"/>
+
+            <Button x:Name="CrawlButton"
+                    Grid.Column="1"
+                    Content="🔍 Lancer le crawl"
+                    Padding="16,6"
+                    Margin="8,0,0,0"
+                    FontSize="14"
+                    Click="CrawlButton_Click"/>
+        </Grid>
+
+        <!-- Indicateur de chargement + liste -->
+        <Grid Grid.Row="2">
+            <!-- ProgressBar visible pendant le chargement -->
+            <ProgressBar x:Name="LoadingBar"
+                         IsIndeterminate="True"
+                         Height="4"
+                         VerticalAlignment="Top"
+                         Visibility="Collapsed"/>
+
+            <ListBox x:Name="LinksListBox"
+                     Margin="0,8,0,0"
+                     ItemsSource="{Binding Links}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" FontSize="13" Padding="2"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Grid>
+
+        <!-- Barre de statut -->
+        <TextBlock x:Name="StatusText"
+                   Grid.Row="3"
+                   Margin="0,8,0,0"
+                   FontSize="12"
+                   Foreground="Gray"
+                   Text="Prêt."/>
     </Grid>
 </Window>
