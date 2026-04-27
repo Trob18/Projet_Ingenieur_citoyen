@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Windows;
+using System.Windows.Controls;
 using ArchiveNumerique.ViewModels;
+using Microsoft.Win32;
 
 namespace ArchiveNumerique
 {
-    /// <summary>
-    /// Interface temporaire pour tester le crawler.
-    /// </summary>
     public partial class MainWindow : Window
     {
         private readonly MainViewModel _viewModel;
@@ -16,6 +15,38 @@ namespace ArchiveNumerique
             InitializeComponent();
             _viewModel = new MainViewModel();
             DataContext = _viewModel;
+
+            // Gerer la visibilite de la ProgressBar
+            _viewModel.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(MainViewModel.IsLoading))
+                {
+                    LoadingProgress.Visibility = _viewModel.IsLoading
+                        ? Visibility.Visible
+                        : Visibility.Collapsed;
+                }
+            };
+
+            // S'abonner aux evenements du serveur HTTP
+            if (App.Server != null)
+            {
+                App.Server.OnServerMessage += msg => 
+                    Dispatcher.Invoke(() => _viewModel.UpdateServerStatus(msg));
+
+                App.Server.OnCrawlStarted += url => 
+                    Dispatcher.Invoke(() => _viewModel.OnCrawlStarted(url));
+
+                App.Server.OnLinkFound += link => 
+                    Dispatcher.Invoke(() => _viewModel.OnLinkFound(link));
+
+                App.Server.OnCrawlComplete += () => 
+                    Dispatcher.Invoke(() => _viewModel.OnCrawlComplete());
+            }
+        }
+
+        private void StopButton_Click(object sender, RoutedEventArgs e)
+        {
+            App.Server?.CurrentCrawlCts?.Cancel();
         }
 
         private async void CrawlButton_Click(object sender, RoutedEventArgs e)
@@ -27,9 +58,7 @@ namespace ArchiveNumerique
                 return;
             }
 
-            // UI : désactiver le bouton et afficher le chargement
             CrawlButton.IsEnabled = false;
-            LoadingBar.Visibility = Visibility.Visible;
             StatusText.Text = $"Crawl en cours sur {url}...";
 
             try
@@ -45,7 +74,76 @@ namespace ArchiveNumerique
             finally
             {
                 CrawlButton.IsEnabled = true;
-                LoadingBar.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        // ─── Export ───────────────────────────────────────────────────────────────
+
+        private void ExportTxt_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel.SelectedHistoryEntry == null) return;
+
+            var domainName = GetDomainName(_viewModel.SelectedHistoryEntry.Url);
+            var dlg = new SaveFileDialog
+            {
+                Title = "Exporter en TXT",
+                Filter = "Fichier texte (*.txt)|*.txt",
+                FileName = $"Exportation lien - {domainName}.txt"
+            };
+
+            if (dlg.ShowDialog() == true)
+            {
+                _viewModel.ExportTxt(dlg.FileName);
+                StatusText.Text = $"Exporté : {dlg.FileName}";
+            }
+        }
+
+        private void ExportCsv_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel.SelectedHistoryEntry == null) return;
+
+            var domainName = GetDomainName(_viewModel.SelectedHistoryEntry.Url);
+            var dlg = new SaveFileDialog
+            {
+                Title = "Exporter en CSV",
+                Filter = "Fichier CSV (*.csv)|*.csv",
+                FileName = $"Exportation lien - {domainName}.csv"
+            };
+
+            if (dlg.ShowDialog() == true)
+            {
+                _viewModel.ExportCsv(dlg.FileName);
+                StatusText.Text = $"Exporté : {dlg.FileName}";
+            }
+        }
+
+        private static string GetDomainName(string url)
+        {
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return uri.Host;
+            return "export";
+        }
+
+        private void LinkContextMenu_Opening(object sender, EventArgs e)
+        {
+            // Juste pour garder le menu contextuel actif
+        }
+
+        private void CopyMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem && menuItem.Parent is ContextMenu contextMenu)
+            {
+                // Récupérer le TextBlock (propriétaire du ContextMenu)
+                var textBlock = contextMenu.PlacementTarget as TextBlock;
+                if (textBlock != null)
+                {
+                    var text = textBlock.Text;
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        Clipboard.SetText(text);
+                        StatusText.Text = "Lien copié !";
+                    }
+                }
             }
         }
     }

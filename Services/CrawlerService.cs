@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
 
@@ -31,7 +32,7 @@ namespace ArchiveNumerique.Services
         /// <summary>
         /// Point d'entrée principal : retourne la liste de tous les liens internes propres.
         /// </summary>
-        public async Task<List<string>> GetInternalLinksAsync(string url)
+        public async Task<List<string>> GetInternalLinksAsync(string url, Action<string>? onLinkFound = null, CancellationToken ct = default)
         {
             var baseUri = new Uri(url.TrimEnd('/') + "/");
 
@@ -46,18 +47,26 @@ namespace ArchiveNumerique.Services
             if (sitemapLinks != null && sitemapLinks.Count > 0)
             {
                 // Filtrer selon robots.txt
-                return sitemapLinks
+                var filtered = sitemapLinks
                     .Where(link => IsAllowedByRobots(link, baseUri, robots.DisallowedPaths))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .OrderBy(l => l)
                     .ToList();
+
+                // Appeler le callback pour chaque lien
+                foreach (var link in filtered)
+                {
+                    onLinkFound?.Invoke(link);
+                }
+
+                return filtered;
             }
 
             // 3. Fallback : crawl BFS en respectant robots.txt
-            return await CrawlAsync(baseUri, robots.DisallowedPaths);
+            return await CrawlAsync(baseUri, robots.DisallowedPaths, onLinkFound, ct);
         }
 
-        private async Task<List<string>> CrawlAsync(Uri baseUri, List<string> disallowedPaths)
+        private async Task<List<string>> CrawlAsync(Uri baseUri, List<string> disallowedPaths, Action<string>? onLinkFound = null, CancellationToken ct = default)
         {
             var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var queue = new Queue<string>();
@@ -66,7 +75,7 @@ namespace ArchiveNumerique.Services
             queue.Enqueue(startUrl);
             visited.Add(startUrl);
 
-            while (queue.Count > 0 && visited.Count < _maxPages)
+            while (queue.Count > 0 && visited.Count < _maxPages && !ct.IsCancellationRequested)
             {
                 var currentUrl = queue.Dequeue();
 
@@ -83,12 +92,13 @@ namespace ArchiveNumerique.Services
                     {
                         visited.Add(link);
                         queue.Enqueue(link);
+                        onLinkFound?.Invoke(link);
                     }
                 }
 
                 // Délai de politesse
                 if (_delayMs > 0)
-                    await Task.Delay(_delayMs);
+                    await Task.Delay(_delayMs, ct);
             }
 
             return visited

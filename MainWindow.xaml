@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:ArchiveNumerique"
         mc:Ignorable="d"
-        Title="Archive Numérique — Crawler" Height="600" Width="900">
+        Title="Archive Numerique - Crawler" Height="680" Width="1050">
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -14,58 +14,103 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Barre de saisie URL -->
-        <TextBlock Grid.Row="0" Text="URL du site à crawler" FontWeight="SemiBold" Margin="0,0,0,4"/>
+        <!-- URL input -->
+        <TextBlock Grid.Row="0" Text="URL du site a crawler" FontWeight="SemiBold" Margin="0,0,0,4"/>
 
         <Grid Grid.Row="1" Margin="0,0,0,12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <TextBox x:Name="UrlTextBox"
-                     Grid.Column="0"
-                     Text="https://www.cesi.fr"
-                     VerticalContentAlignment="Center"
-                     Padding="6,4"
-                     FontSize="14"/>
-
-            <Button x:Name="CrawlButton"
-                    Grid.Column="1"
-                    Content="🔍 Lancer le crawl"
-                    Padding="16,6"
-                    Margin="8,0,0,0"
-                    FontSize="14"
-                    Click="CrawlButton_Click"/>
+            <TextBox x:Name="UrlTextBox" Grid.Column="0" Text="{Binding CurrentUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" Padding="6,4" FontSize="14"/>
+            <Button x:Name="CrawlButton" Grid.Column="1" Content="Lancer le crawl" Padding="16,6" Margin="8,0,0,0" FontSize="14" Click="CrawlButton_Click"/>
+            <Button x:Name="StopButton" Grid.Column="2" Content="Arreter" Padding="16,6" Margin="8,0,0,0" FontSize="14" Click="StopButton_Click" IsEnabled="{Binding IsLoading}"/>
         </Grid>
 
-        <!-- Indicateur de chargement + liste -->
-        <Grid Grid.Row="2">
-            <!-- ProgressBar visible pendant le chargement -->
-            <ProgressBar x:Name="LoadingBar"
-                         IsIndeterminate="True"
-                         Height="4"
-                         VerticalAlignment="Top"
-                         Visibility="Collapsed"/>
+        <!-- Tabs -->
+        <TabControl Grid.Row="2">
+            <TabItem Header="Resultats">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <ProgressBar x:Name="LoadingProgress" Grid.Row="0" IsIndeterminate="True" Height="4" Visibility="Collapsed"/>
+                    <ListBox x:Name="LinksListBox" Grid.Row="1" Margin="0,4,0,0" ItemsSource="{Binding Links}" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" ContextMenuOpening="LinkContextMenu_Opening">
+                                    <TextBlock.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Copier" Click="CopyMenuItem_Click"/>
+                                        </ContextMenu>
+                                    </TextBlock.ContextMenu>
+                                </TextBlock>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </TabItem>
 
-            <ListBox x:Name="LinksListBox"
-                     Margin="0,8,0,0"
-                     ItemsSource="{Binding Links}"
-                     ScrollViewer.HorizontalScrollBarVisibility="Auto">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" FontSize="13" Padding="2"/>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+            <TabItem Header="{Binding HistoryTabHeader}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="370"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <ListBox Grid.Column="0" ItemsSource="{Binding HistoryEntries}" SelectedItem="{Binding SelectedHistoryEntry}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="4,3">
+                                    <TextBlock Text="{Binding Url}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding Url}"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding DisplayDate}" FontSize="11" Foreground="Gray"/>
+                                        <TextBlock Text=" - " FontSize="11" Foreground="Gray"/>
+                                        <TextBlock Text="{Binding LinkCount}" FontSize="11" Foreground="#1565C0"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <Grid Grid.Column="1" Margin="10,0,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,4,0,8">
+                            <Button Content="Exporter txt" Padding="14,5" FontSize="13" Click="ExportTxt_Click" IsEnabled="{Binding HasSelectedHistory}"/>
+                            <Button Content="Exporter csv" Padding="14,5" FontSize="13" Margin="10,0,0,0" Click="ExportCsv_Click" IsEnabled="{Binding HasSelectedHistory}"/>
+                        </StackPanel>
+                        <ListBox Grid.Row="1" ItemsSource="{Binding SelectedHistoryLinks}" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" ContextMenuOpening="LinkContextMenu_Opening">
+                                        <TextBlock.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Copier" Click="CopyMenuItem_Click"/>
+                                            </ContextMenu>
+                                        </TextBlock.ContextMenu>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <!-- Status -->
+        <Grid Grid.Row="3" Margin="0,8,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="StatusText" Grid.Row="0" FontSize="12" Foreground="Gray" Text="Pret."/>
+            <TextBlock x:Name="ServerStatusText" Grid.Row="1" FontSize="11" Foreground="DarkBlue" Margin="0,4,0,0" Text="{Binding ServerStatus}"/>
         </Grid>
-
-        <!-- Barre de statut -->
-        <TextBlock x:Name="StatusText"
-                   Grid.Row="3"
-                   Margin="0,8,0,0"
-                   FontSize="12"
-                   Foreground="Gray"
-                   Text="Prêt."/>
     </Grid>
 </Window>
