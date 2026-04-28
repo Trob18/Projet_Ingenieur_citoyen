@@ -14,8 +14,12 @@ const btnDownload = document.getElementById("btnDownload");
 // --- Utilitaires ---
 
 async function getTargetOrigin() {
-  const manualUrl = inputUrl.value.trim();
+  let manualUrl = inputUrl.value.trim();
   if (manualUrl) {
+    // Ajouter https:// si aucun schéma n'est précisé
+    if (!/^https?:\/\//i.test(manualUrl)) {
+      manualUrl = "https://" + manualUrl;
+    }
     const url = new URL(manualUrl);
     currentHost = url.hostname;
     return url.origin;
@@ -101,7 +105,32 @@ btnExtract.addEventListener("click", async () => {
 
   if (sitemapOk) {
     updateUI();
-    setStatus("✓ Liens récupérés via Sitemap !");
+    setStatus("✓ Liens récupérés via Sitemap ! Synchronisation avec l'application…");
+    
+    // Quand même contacter le serveur pour que l'application enregistre l'historique
+    try {
+      const ping = await fetch("http://127.0.0.1:5789/ping", {
+        signal: AbortSignal.timeout(2000)
+      });
+      
+      if (ping.ok) {
+        const links = Array.from(extractedLinks);
+        const res = await fetch("http://127.0.0.1:5789/crawl", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: origin, presyncedLinks: links }),
+          signal: AbortSignal.timeout(10000)
+        });
+        
+        if (res.ok) {
+          setStatus("✓ Liens synchronisés avec l'application !");
+        }
+      }
+    } catch (err) {
+      console.log("[Extension] Synchronisation avec l'application échouée (non critique):", err);
+      // Ce n'est pas grave, on a quand même les liens à afficher
+    }
+    
     setButtonsDisabled(false);
     return;
   }

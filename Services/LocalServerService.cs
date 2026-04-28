@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -128,20 +129,48 @@ namespace ArchiveNumerique.Services
 
                     try
                     {
-                        OnServerMessage?.Invoke($"[Extension] Crawling: {req.Url}");
+                        // Vérifier si les liens ont déjà été trouvés par l'extension (sitemap)
+                        if (req.PresyncedLinks != null && req.PresyncedLinks.Count > 0)
+                        {
+                            OnServerMessage?.Invoke($"[Extension] Liens pré-synchronisés - {req.PresyncedLinks.Count} liens détectés");
+                            // Notifier chaque lien trouvé
+                            foreach (var link in req.PresyncedLinks)
+                            {
+                                OnLinkFound?.Invoke(link);
+                            }
+                            OnServerMessage?.Invoke($"[Extension] Pré-synchronisation terminée - {req.PresyncedLinks.Count} liens enregistrés");
+                            OnCrawlComplete?.Invoke();
 
-                        var crawler = new CrawlerService(maxPages: 500, delayMs: 200);
-                        
-                        // Callback pour chaque lien trouvé
-                        Action<string> onLinkFound = link => OnLinkFound?.Invoke(link);
-                        
-                        var links = await crawler.GetInternalLinksAsync(req.Url, onLinkFound, cts.Token);
+                            var response = JsonSerializer.Serialize(new { links = req.PresyncedLinks });
+                            await WriteJsonAsync(ctx, response);
+                        }
+                        else
+                        {
+                            // Crawl complet
+                            OnServerMessage?.Invoke($"[Extension] Crawling: {req.Url}");
 
-                        OnServerMessage?.Invoke($"[Extension] Crawl terminé - {links.Count} liens trouvés");
+                            var crawler = new CrawlerService(maxPages: 500, delayMs: 200);
+                            
+                            // Callback pour chaque lien trouvé
+                            Action<string> onLinkFound = link => OnLinkFound?.Invoke(link);
+                            
+                            var links = await crawler.GetInternalLinksAsync(req.Url, onLinkFound, cts.Token);
+
+                            OnServerMessage?.Invoke($"[Extension] Crawl terminé - {links.Count} liens trouvés");
+                            OnCrawlComplete?.Invoke();
+
+                            var response = JsonSerializer.Serialize(new { links });
+                            await WriteJsonAsync(ctx, response);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        OnServerMessage?.Invoke("[Extension] Crawl arrêté par l'utilisateur");
                         OnCrawlComplete?.Invoke();
-
-                        var response = JsonSerializer.Serialize(new { links });
-                        await WriteJsonAsync(ctx, response);
+                        // Retourner les liens collectés jusqu'ici (déjà notifiés via OnLinkFound)
+                        ctx.Response.StatusCode = 200;
+                        var partialResponse = JsonSerializer.Serialize(new { links = Array.Empty<string>(), stopped = true });
+                        await WriteJsonAsync(ctx, partialResponse);
                     }
                     finally
                     {
@@ -173,6 +202,7 @@ namespace ArchiveNumerique.Services
         private sealed class CrawlRequest
         {
             public string Url { get; set; } = "";
+            public List<string>? PresyncedLinks { get; set; } // Liens pré-synchronisés par l'extension (sitemap)
         }
     }
 }

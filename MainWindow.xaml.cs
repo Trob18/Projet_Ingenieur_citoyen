@@ -46,6 +46,7 @@ namespace ArchiveNumerique
 
         private void StopButton_Click(object sender, RoutedEventArgs e)
         {
+            _viewModel.StopCrawl();
             App.Server?.CurrentCrawlCts?.Cancel();
         }
 
@@ -65,6 +66,10 @@ namespace ArchiveNumerique
             {
                 await _viewModel.LoadLinksAsync(url);
                 StatusText.Text = $"Terminé — {_viewModel.Links.Count} lien(s) trouvé(s).";
+            }
+            catch (OperationCanceledException)
+            {
+                StatusText.Text = $"Arrêté — {_viewModel.Links.Count} lien(s) trouvé(s) avant arrêt.";
             }
             catch (Exception ex)
             {

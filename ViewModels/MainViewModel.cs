@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using ArchiveNumerique.Models;
 using ArchiveNumerique.Services;
@@ -11,6 +12,7 @@ namespace ArchiveNumerique.ViewModels
     internal class MainViewModel : BaseViewModel
     {
         private readonly HistoryService _historyService = new();
+        private CancellationTokenSource? _crawlCts;
 
         // ─── Propriétés du crawl en cours ─────────────────────────────────────────
 
@@ -141,8 +143,18 @@ namespace ArchiveNumerique.ViewModels
 
         // ─── Crawl manuel depuis l'interface ──────────────────────────────────────
 
+        public void StopCrawl()
+        {
+            _crawlCts?.Cancel();
+        }
+
         public async Task LoadLinksAsync(string url)
         {
+            _crawlCts?.Cancel();
+            _crawlCts?.Dispose();
+            _crawlCts = new CancellationTokenSource();
+            var ct = _crawlCts.Token;
+
             try
             {
                 IsLoading = true;
@@ -150,7 +162,7 @@ namespace ArchiveNumerique.ViewModels
                 Links.Clear();
                 var crawlerService = new CrawlerService(maxPages: 500, delayMs: 200);
                 var links = await crawlerService.GetInternalLinksAsync(url,
-                    onLinkFound: link => Links.Add(link));
+                    onLinkFound: link => Links.Add(link), ct);
 
                 // Reconstruire la liste propre (sans doublons potentiels)
                 var allLinks = links.Union(Links).ToList();
@@ -163,6 +175,8 @@ namespace ArchiveNumerique.ViewModels
             }
             finally
             {
+                _crawlCts?.Dispose();
+                _crawlCts = null;
                 OnCrawlComplete();
             }
         }

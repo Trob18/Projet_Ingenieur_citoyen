@@ -34,6 +34,13 @@ namespace ArchiveNumerique.Services
         /// </summary>
         public async Task<List<string>> GetInternalLinksAsync(string url, Action<string>? onLinkFound = null, CancellationToken ct = default)
         {
+            // Normaliser l'URL : ajouter https:// si aucun schéma n'est précisé
+            if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                url = "https://" + url;
+            }
+
             var baseUri = new Uri(url.TrimEnd('/') + "/");
 
             // 1. Lire robots.txt
@@ -56,6 +63,7 @@ namespace ArchiveNumerique.Services
                 // Appeler le callback pour chaque lien
                 foreach (var link in filtered)
                 {
+                    ct.ThrowIfCancellationRequested();
                     onLinkFound?.Invoke(link);
                 }
 
@@ -84,7 +92,7 @@ namespace ArchiveNumerique.Services
                 if (!RobotsService.IsAllowed(path, disallowedPaths))
                     continue;
 
-                var links = await ExtractLinksFromPageAsync(currentUrl, baseUri);
+                var links = await ExtractLinksFromPageAsync(currentUrl, baseUri, ct);
 
                 foreach (var link in links)
                 {
@@ -107,13 +115,13 @@ namespace ArchiveNumerique.Services
                 .ToList();
         }
 
-        private async Task<List<string>> ExtractLinksFromPageAsync(string url, Uri baseUri)
+        private async Task<List<string>> ExtractLinksFromPageAsync(string url, Uri baseUri, CancellationToken ct = default)
         {
             var results = new List<string>();
 
             try
             {
-                var response = await _httpClient.GetAsync(url);
+                var response = await _httpClient.GetAsync(url, ct);
                 if (!response.IsSuccessStatusCode)
                     return results;
 
