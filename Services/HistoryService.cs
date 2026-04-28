@@ -101,5 +101,23 @@ namespace ArchiveNumerique.Services
             File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
         }
 
+        // ─── Effacement de l'historique ────────────────────────────────────────────
+
+        /// <summary>
+        /// Efface complètement l'historique en supprimant le fichier.
+        /// </summary>
+        public void ClearHistory()
+        {
+            try
+            {
+                if (File.Exists(FilePath))
+                    File.Delete(FilePath);
+            }
+            catch
+            {
+                // Ignorer les erreurs silencieusement
+            }
+        }
+
     }
 }

@@ -84,6 +84,7 @@
                         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,4,0,8">
                             <Button Content="Exporter txt" Padding="14,5" FontSize="13" Click="ExportTxt_Click" IsEnabled="{Binding HasSelectedHistory}"/>
                             <Button Content="Exporter csv" Padding="14,5" FontSize="13" Margin="10,0,0,0" Click="ExportCsv_Click" IsEnabled="{Binding HasSelectedHistory}"/>
+                            <Button Content="Effacer historique" Padding="14,5" FontSize="13" Margin="10,0,0,0" Click="ClearHistory_Click" Background="#FF6B6B" Foreground="White"/>
                         </StackPanel>
                         <ListBox Grid.Row="1" ItemsSource="{Binding SelectedHistoryLinks}" ScrollViewer.HorizontalScrollBarVisibility="Auto">
                             <ListBox.ItemTemplate>

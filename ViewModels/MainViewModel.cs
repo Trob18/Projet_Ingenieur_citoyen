@@ -130,6 +130,15 @@ namespace ArchiveNumerique.ViewModels
         public void ExportCsv(string filePath) =>
             HistoryService.ExportCsv(SelectedHistoryEntry!, filePath);
 
+        // ─── Effacement de l'historique ────────────────────────────────────────────
+
+        public void ClearAllHistory()
+        {
+            _historyService.ClearHistory();
+            HistoryEntries.Clear();
+            SelectedHistoryEntry = null;
+        }
+
         // ─── Crawl manuel depuis l'interface ──────────────────────────────────────
 
         public async Task LoadLinksAsync(string url)

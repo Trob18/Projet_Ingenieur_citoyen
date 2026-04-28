@@ -117,6 +117,21 @@ namespace ArchiveNumerique
             }
         }
 
+        private void ClearHistory_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "Êtes-vous sûr de vouloir effacer complètement l'historique ?",
+                "Confirmation",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                _viewModel.ClearAllHistory();
+                StatusText.Text = "Historique effacé.";
+            }
+        }
+
         private static string GetDomainName(string url)
         {
             if (Uri.TryCreate(url, UriKind.Absolute, out var uri))

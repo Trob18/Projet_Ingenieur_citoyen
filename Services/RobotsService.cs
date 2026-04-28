@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -18,8 +17,11 @@ namespace ArchiveNumerique.Services
             _httpClient = httpClient;
         }
 
+        private const string BotName = "ArchiveNumeriqueBot";
+
         /// <summary>
-        /// Télécharge et parse robots.txt pour l'user-agent "*".
+        /// Télécharge et parse robots.txt.
+        /// Priorité : règles spécifiques à ArchiveNumeriqueBot, sinon règles wildcard "*".
         /// </summary>
         public async Task<RobotsResult> ParseAsync(Uri baseUri)
         {
@@ -29,23 +31,30 @@ namespace ArchiveNumerique.Services
                 var robotsUrl = new Uri(baseUri, "/robots.txt");
                 var content = await _httpClient.GetStringAsync(robotsUrl);
 
-                bool appliesToUs = false;
+                var wildcardDisallowed = new List<string>();
+                var botDisallowed = new List<string>();
+                var currentAgent = "";
 
                 foreach (var rawLine in content.Split('\n'))
                 {
                     var line = rawLine.Trim();
 
+                    if (line.StartsWith("#", StringComparison.Ordinal) || string.IsNullOrEmpty(line))
+                        continue;
+
                     if (line.StartsWith("User-agent:", StringComparison.OrdinalIgnoreCase))
                     {
-                        var agent = line.Substring("User-agent:".Length).Trim();
-                        appliesToUs = agent == "*";
+                        currentAgent = line.Substring("User-agent:".Length).Trim();
                     }
-                    else if (line.StartsWith("Disallow:", StringComparison.OrdinalIgnoreCase) && appliesToUs)
+                    else if (line.StartsWith("Disallow:", StringComparison.OrdinalIgnoreCase))
                     {
                         var path = line.Substring("Disallow:".Length).Trim();
                         if (!string.IsNullOrEmpty(path))
                         {
-                            result.DisallowedPaths.Add(path);
+                            if (currentAgent == "*")
+                                wildcardDisallowed.Add(path);
+                            else if (currentAgent.Equals(BotName, StringComparison.OrdinalIgnoreCase))
+                                botDisallowed.Add(path);
                         }
                     }
                     else if (line.StartsWith("Sitemap:", StringComparison.OrdinalIgnoreCase))
@@ -57,6 +66,9 @@ namespace ArchiveNumerique.Services
                         }
                     }
                 }
+
+                // Règles spécifiques à notre bot en priorité, sinon wildcard
+                result.DisallowedPaths = botDisallowed.Count > 0 ? botDisallowed : wildcardDisallowed;
             }
             catch (HttpRequestException)
             {
