@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Extracteur de Liens",
+  "version": "1.0",
+  "permissions": ["activeTab", "downloads", "clipboardWrite"],
+  "host_permissions": ["<all_urls>", "http://127.0.0.1:5789/*"],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
